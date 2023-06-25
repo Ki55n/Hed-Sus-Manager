@@ -1,26 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
+
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract HedManager {
-    using SafeCast for int256;
+    using Counters for Counters.Counter;
     using SafeMath for uint256;
 
-    AggregatorV3Interface internal eth_usd_price_feed;
-
-    using Counters for Counters.Counter;
     Counters.Counter private explorersCount;
-    Counters.Counter private donersCount;
     Counters.Counter private projectCount;
-
-    constructor() {
-        eth_usd_price_feed = AggregatorV3Interface(
-            0xd0D5e3DB44DE05E9F294BB0a3bEEaF030DE24Ada
-        );
-    }
 
     struct Explorer {
         uint256 id;
@@ -29,161 +18,119 @@ contract HedManager {
         string name;
         string bio;
         string country;
-        string sdgCategory;
-        string image;
+        string avatar;
         string twitter;
-        string youtube;
-        string instagram;
-        uint256 amountRecieved;
+        string github;
     }
 
     struct Project {
         uint256 projectId;
         uint256 explorerId;
         address payable owner;
-        string explorerName;
-        string cover;
+        string image;
         string title;
-        Doners doners;
-        string country;
-        string community;
-        uint256 target;
+        string github_link;
+        string demo;
+        string website;
+        uint256 target_amount;
         string description;
-        string sdgCategory;
-        uint256 amountRecieved;
-    }
-
-    struct Doners {
-        uint256 id;
-        address _address;
-        uint256 amount;
+        string category;
+        uint256 amountReceived;
+        address[] sponsors; // Array to store sponsor addresses
     }
 
     mapping(uint256 => Explorer) explorers;
-    mapping(uint256 => Project) project;
-    mapping(string => uint256) category;
+    mapping(uint256 => Project) projects;
     mapping(address => bool) public isRegistered;
-    mapping(uint256 => mapping(uint256 => Doners)) public doners;
 
-    //create functions
-    function createEplorer(
+    function createExplorer(
         string memory _name,
         string memory _bio,
         string memory _country,
-        string memory _sdgCategory,
-        string memory _image,
+        string memory _avatar,
         string memory _twitter,
-        string memory _youtube,
-        string memory _instagram
+        string memory _github
     ) public {
         explorersCount.increment();
-        Explorer storage _explorer = explorers[explorersCount.current()];
-        _explorer.id = explorersCount.current();
-        _explorer.owner = payable(address(msg.sender));
-        _explorer.dateJoined = block.timestamp;
-        _explorer.name = _name;
-        _explorer.bio = _bio;
-        _explorer.country = _country;
-        _explorer.sdgCategory = _sdgCategory;
-        _explorer.image = _image;
-        _explorer.twitter = _twitter;
-        _explorer.youtube = _youtube;
-        _explorer.instagram = _instagram;
+        uint256 explorerId = explorersCount.current();
         isRegistered[msg.sender] = true;
-        explorers[explorersCount.current()] = _explorer;
+        explorers[explorerId] = Explorer(
+            explorerId,
+            payable(msg.sender),
+            block.timestamp,
+            _name,
+            _bio,
+            _country,
+            _avatar,
+            _twitter,
+            _github
+        );
     }
 
     function createProject(
-        string memory _cover,
+        string memory _image,
         string memory _title,
-        string memory _country,
-        string memory _sdgCategory,
-        string memory _community,
-        uint256 _target,
+        string memory _github_link,
+        string memory _demo,
+        string memory _website,
+        uint256 _target_amount,
         string memory _description,
-        uint256 _explorerId,
-        string memory _explorerName
+        string memory _category,
+        uint256 _explorerId
     ) public {
         projectCount.increment();
-        Project storage _project = project[projectCount.current()];
-        _project.projectId = projectCount.current();
-        _project.explorerId = _explorerId;
-        _project.explorerName = _explorerName;
-        _project.cover = _cover;
-        _project.title = _title;
-        _project.country = _country;
-        _project.sdgCategory = _sdgCategory;
-        _project.community = _community;
-        _project.target = _target;
-        _project.description = _description;
-        _project.owner = payable(address(msg.sender));
-        project[projectCount.current()] = _project;
+        uint256 projectId = projectCount.current();
+        projects[projectId] = Project(
+            projectId,
+            _explorerId,
+            payable(msg.sender),
+            _image,
+            _title,
+            _github_link,
+            _demo,
+            _website,
+            _target_amount,
+            _description,
+            _category,
+            0,
+            new address[](0) // Initialize empty sponsors array
+        );
     }
 
-    function addSponser(
-        uint256 _id,
-        uint256 _userId,
-        string memory _categoryName
+    function addSponsor(
+        uint256 _id
     ) public payable {
         require(_id > 0 && _id <= projectCount.current());
-        Project storage _project = project[_id];
-        Explorer storage _explorer = explorers[_userId];
-        category[_categoryName] = category[_categoryName] + msg.value;
-        address payable _owner = payable(address(_project.owner));
-        _owner.transfer(msg.value);
-        _project.amountRecieved = _project.amountRecieved + msg.value;
-        _explorer.amountRecieved = _explorer.amountRecieved + msg.value;
-        project[_id] = _project;
-        explorers[_userId] = _explorer;
+        Project storage project = projects[_id];
+        project.owner.transfer(msg.value);
+        project.amountReceived = project.amountReceived.add(msg.value);
+        project.sponsors.push(msg.sender); // Add sponsor address to the project's sponsors array
     }
 
-    //get functions
-
-    //get EthUsd
-    function getEthUsd() public view returns (uint256) {
-        (, int256 price, , , ) = eth_usd_price_feed.latestRoundData();
-        return price.toUint256();
-    }
-
-    function getExplorer() public view returns (Explorer[] memory) {
-        uint256 itemCount = explorersCount.current();
-        uint256 currentIndex = 0;
-        Explorer[] memory _explorer = new Explorer[](itemCount);
-        for (uint256 i = 0; i < itemCount; i++) {
-            uint256 currentId = i + 1;
-            Explorer storage currentItem = explorers[currentId];
-            _explorer[currentIndex] = currentItem;
-            currentIndex += 1;
+    function getExplorers() public view returns (Explorer[] memory) {
+        Explorer[] memory _explorers = new Explorer[](explorersCount.current());
+        for (uint256 i = 1; i <= explorersCount.current(); i++) {
+            _explorers[i - 1] = explorers[i];
         }
-        return _explorer;
+        return _explorers;
     }
 
-    function getProject() public view returns (Project[] memory) {
-        uint256 itemCount = projectCount.current();
-        uint256 currentIndex = 0;
-        Project[] memory _project = new Project[](itemCount);
-        for (uint256 i = 0; i < itemCount; i++) {
-            uint256 currentId = i + 1;
-            Project storage currentItem = project[currentId];
-            _project[currentIndex] = currentItem;
-            currentIndex += 1;
+    function getProjects() public view returns (Project[] memory) {
+        Project[] memory _projects = new Project[](projectCount.current());
+        for (uint256 i = 1; i <= projectCount.current(); i++) {
+            _projects[i - 1] = projects[i];
         }
-        return _project;
+        return _projects;
+    }
+    function getUser(uint256 _id) public view returns (Explorer memory) {
+        return explorers[_id];
+    }
+
+    function getProject(uint256 _id) public view returns (Project memory) {
+        return projects[_id];
     }
 
     function isRegisteredFunc() public view returns (bool) {
-        if (isRegistered[msg.sender] == true) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    function getCategoryPrice(string memory _category)
-        public
-        view
-        returns (uint256)
-    {
-        return category[_category];
+        return isRegistered[msg.sender];
     }
 }

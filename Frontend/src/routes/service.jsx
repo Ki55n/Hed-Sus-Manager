@@ -1,0 +1,85 @@
+import React, { useContext, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import { FaStar } from "react-icons/fa";
+import { ServiceContext } from "../context/ServiceContext";
+import { PlatformContext } from "../context/PlatformContext";
+import ActionControls from "../components/services/ActionControls";
+import { Loader } from "../components";
+import AutoAvatar from "../components/AutoAvatar";
+import { contractAddress } from "../utils/constants";
+import contractABI from "../utils/contractABI.json";
+import { shortenAddress } from "../utils/shortenAddress";
+
+export default function Service() {
+  const params = useParams();
+  const { etheruem } = window;
+  const { service, getService } = useContext(ServiceContext);
+  const { isLoading } = useContext(PlatformContext);
+  const serviceId = params.id;
+  const [rating, setRating] = useState(0);
+  const [profile, setProfile] = useState(null);
+
+  const getProfile = async (address) => {
+    if (etheruem && address) {
+      try {
+        const contract = await etheruem.contract(contractABI, contractAddress);
+        const r = await contract.getProfile(address).call();
+        setProfile(r);
+      } catch (error) {
+        console.log(error);
+        alert(error.message);
+      }
+    } else {
+      console.log("An error occured");
+    }
+  };
+
+  useEffect(() => {
+    if (etheruem) {
+      getService(serviceId);
+      getProfile(service.author);
+    }
+  }, [serviceId]);
+  return (
+    <div className="min-h-screen text-white">
+      <div className="container mx-auto flex flex-col self-center items-center white-glassmorphism p-3">
+        <div className="flex flex-col w-full">
+          <img
+            alt="Service"
+            className="self-center rounded-md"
+            src={service.image}
+          />
+          <div className="flex flex-col ">
+            <div className="mt-2 text-center white-glassmorphism">
+              Funding...
+            </div>
+            <div className="flex flex-row justify-between w-full">
+              <p className="mt-2 text-4xl text-left">{service.title}</p>
+              <p className="mt-2 text-2xl text-right">Received:  {service.price} TRX</p>
+            </div>
+            <p className="mt-1 text-2xl">{service.description}</p>
+            <p className="mt-1 text-xl">
+              Delivery Time: {service.deliveryTime} days
+            </p>
+            <div className="pt-4 flex flex-row gap-2 items-center italic">
+              <div className="flex flex-row items-center">
+                {profile && profile.avatar ? (
+                  <img alt="Avatar" className="w-[2.5rem] mr-1 rounded-full border" src={profile.avatar} />
+                ) : (
+                  <AutoAvatar userId={service.author} size={36} />
+                )}
+                {profile ? profile.username : shortenAddress(service.author)}
+              </div>
+              
+            </div>
+            Funding...
+          </div>
+          {isLoading ? <Loader /> : <ActionControls service={service} />}
+        </div>
+      </div>
+
+      <ToastContainer />
+    </div>
+  );
+}

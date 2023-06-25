@@ -4,6 +4,8 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
 
   console.log("Deploying contracts with the account:", deployer.address);
+  const balance = await deployer.getBalance();
+  console.log(`Account balance: ${balance.toString()}`);
 
   let txHash, txReceipt;
 
